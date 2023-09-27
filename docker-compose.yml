@@ -1,0 +1,29 @@
+version: '3.8'
+
+x-common: &common
+  image: obj-03:latest
+  runtime: nvidia
+  environment:
+    - NVIDIA_VISIBLE_DEVICES=all
+  env_file:
+    - .env
+
+x-python: &python
+  <<: *common
+  volumes:
+    - ./src:/code/
+    - /mnt/data/other/smd/data:/code/data
+    - /mnt/data/other/smd/logs:/code/logs
+    - /mnt/data/other/smd/results:/code/results
+    - /mnt/data/other/smd/models:/code/models
+    - ~/.models:/root/.keras/models
+    - ~/.notebooks:/notebooks
+
+
+services:
+  test-smi:
+    <<: *common
+    command: nvidia-smi
+  00_shared:
+    <<: *python
+    command: python3 code/0_test.py
