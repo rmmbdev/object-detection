@@ -1,3 +1,4 @@
+# v1
 FROM nvidia/cuda:12.0.1-cudnn8-runtime-ubuntu22.04
 
 ENV TZ=Asia/Dubai
