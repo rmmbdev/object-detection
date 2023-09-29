@@ -1,32 +1,29 @@
 # dockerfile v1
 import argparse
-import copy
-import csv
 import os
+import subprocess
 import warnings
 
-import matplotlib.pyplot as plt
+import cv2
 import numpy
 import torch
-import tqdm
 import yaml
-
 from torch import Tensor
 from torch.utils import data
 
 from image_utils import draw_rectangle_with_text_wrt_points
-from nets.nn import yolo_v8_n
-from src.utils.dataset import Dataset
+from src.utils.dataset_video import Dataset
 from src.utils.util import (
-    EMA,
-    ComputeLoss,
-    AverageMeter,
-    clip_gradients,
-    strip_optimizer,
     non_max_suppression,
     setup_seed,
     setup_multi_processes
 )
+
+import matplotlib
+
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 warnings.filterwarnings("ignore")
 ROOT = '/code/'
@@ -43,8 +40,9 @@ def learning_rate(args, params):
 @torch.no_grad()
 def test(args, params, model=None):
     filenames = []
-    filenames.append(os.path.join(ROOT, 'data', 'bus.jpg'))
-    dataset = Dataset(filenames, args.input_size, params, False)
+    filenames.append(os.path.join(ROOT, 'data', 'VIS_Onboard', 'VIS_Onboard', 'Videos', 'MVI_0790_VIS_OB.avi'))
+    filenames.append(os.path.join(ROOT, 'data', 'VIS_Onboard', 'VIS_Onboard', 'Videos', 'MVI_0792_VIS_OB.avi'))
+    dataset = Dataset(filenames, args.input_size, params, )
     loader = data.DataLoader(
         dataset,
         batch_size=8,
@@ -61,6 +59,7 @@ def test(args, params, model=None):
     model.eval()
 
     plots = []
+    file_index = 0
     for samples, targets, shapes in loader:
         samples = samples.cuda()
         targets = targets.cuda()
@@ -90,7 +89,7 @@ def test(args, params, model=None):
                 conf = obj[4].numpy()
                 cls = obj[5].numpy()
 
-                if conf > 0.1:
+                if conf > 0.01:
                     sample_with_boxes = draw_rectangle_with_text_wrt_points(
                         sample_with_boxes,
                         int(box[0]),
@@ -100,6 +99,13 @@ def test(args, params, model=None):
                         str(cls),
                     )
 
+            # fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+            # axs[0].imshow(sample)
+            # axs[0].set_title('Original')
+            #
+            # axs[1].imshow(sample_with_boxes)
+            # axs[1].set_title('Detected')
+
             plt.subplot(1, 2, 1)
             plt.imshow(sample)
             plt.title('Original')
@@ -107,8 +113,47 @@ def test(args, params, model=None):
             plt.subplot(1, 2, 2)
             plt.imshow(sample_with_boxes)
             plt.title('Detected')
+            #
+            # plots.append(fig)
+            plt.savefig(os.path.join(ROOT, "results", f"vid{file_index}-file{i}.png"))
+            plots.append(plt)
 
-            plt.savefig(os.path.join(ROOT, "results", f"sample-{i}.jpg"))
+            if len(plots) >= loader.dataset.video_frames[filenames[file_index]]:
+                # save plots
+                result_root = os.path.join(ROOT, "results")
+
+                # subprocess.call([
+                #     'local/bin/ffmpeg',
+                #     '-framerate', '8',
+                #     '-i', 'file%02d.png',
+                #     '-r', '30',
+                #     '-pix_fmt', 'yuv420p',
+                #     os.path.join(result_root, 'video_name.mp4')
+                # ])
+
+                # def update(frame):
+                #     plt.clf()  # Clear the current plot
+                #     plt.imshow(plots[frame].canvas.buffer_rgba())
+                #     plt.axis('off')  # Turn off axis
+                #     plt.title(f'Frame {frame + 1}')
+                #
+                # fig = plt.figure()
+                #
+                # # Create an animation object
+                # animation = FuncAnimation(fig, update, frames=len(plots), repeat=False)
+                #
+                # # Save the animation as an mp4 video
+                # video_output_path = os.path.join(
+                #     ROOT, "results", f"{filenames[file_index]}".replace(".avi", "-output.mp4")
+                # )
+                # animation.save(video_output_path, writer='ffmpeg')
+
+                # video = cv2.VideoWriter('video.mp4', cv2.VideoWriter_fourcc('A', 'V', 'C', '1'), 1,
+                #                         (mat.shape[0], mat.shape[1]))
+
+                file_index += 1
+                plots = []
+            # plots.append(fig)
 
     return plots
 
@@ -116,7 +161,7 @@ def test(args, params, model=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-size', default=640, type=int)
-    parser.add_argument('--batch-size', default=32, type=int)
+    parser.add_argument('--batch-size', default=128, type=int)
 
     args = parser.parse_args()
 

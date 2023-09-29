@@ -12,78 +12,62 @@ FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'
 
 
 class Dataset(data.Dataset):
-    def __init__(self, filenames, input_size, params, augment):
+    def __init__(self, filenames, input_size, params):
         self.params = params
-        self.mosaic = augment
-        self.augment = augment
         self.input_size = input_size
+        self.filenames = filenames
+        self.video_frames = {}
 
-        # Read labels
-        cache = self.load_label(filenames)
-        labels, shapes = zip(*cache.values())
-        self.labels = list(labels)
-        self.shapes = numpy.array(shapes, dtype=numpy.float64)
-        self.filenames = list(cache.keys())  # update
-        self.n = len(shapes)  # number of samples
-        self.indices = range(self.n)
-        # Albumentations (optional, only used if package is installed)
-        self.albumentations = Albumentations()
+        self.current_capture = None
+        self.current_file_index = 0
+        self.current_frame_index = 0
+
+        self.load_files()
+
+    def load_files(self):
+        for fn in self.filenames:
+            video_capture = cv2.VideoCapture(fn)
+            frame_count = 0
+
+            # Loop to read each frame from the video
+            while True:
+                # Read the next frame from the video
+                ret, frame = video_capture.read()
+
+                # Check if the frame was read successfully
+                if (not ret) or (frame_count >= 5):
+                    break  # Break the loop when the video ends or an error occurs
+
+                # Increment the frame counter
+                frame_count += 1
+
+            # Release the video capture object
+            video_capture.release()
+
+            self.video_frames[fn] = frame_count
 
     def __getitem__(self, index):
-        index = self.indices[index]
+        if self.current_capture is None:
+            file_name = self.filenames[self.current_file_index]
+            self.current_capture = cv2.VideoCapture(file_name)
+            self.current_frame_index = 0
 
-        params = self.params
-        mosaic = self.mosaic and random.random() < params['mosaic']
+        if self.current_frame_index > self.video_frames[self.filenames[self.current_file_index]]:
+            file_name = self.filenames[self.current_file_index]
+            self.current_file_index += 1
+            self.current_capture = cv2.VideoCapture(file_name)
+            self.current_frame_index = 0
 
-        if mosaic:
-            shapes = None
-            # Load MOSAIC
-            image, label = self.load_mosaic(index, params)
-            # MixUp augmentation
-            if random.random() < params['mix_up']:
-                index = random.choice(self.indices)
-                mix_image1, mix_label1 = image, label
-                mix_image2, mix_label2 = self.load_mosaic(index, params)
+        image, shape = self.load_image(index)
+        self.current_frame_index += 1
+        h, w = image.shape[:2]
 
-                image, label = mix_up(mix_image1, mix_label1, mix_image2, mix_label2)
-        else:
-            # Load image
-            image, shape = self.load_image(index)
-            h, w = image.shape[:2]
+        # Resize
+        image, ratio, pad = resize(image, self.input_size, augment=False)
+        shapes = shape, ((h / shape[0], w / shape[1]), pad)  # for COCO mAP rescaling
 
-            # Resize
-            image, ratio, pad = resize(image, self.input_size, self.augment)
-            shapes = shape, ((h / shape[0], w / shape[1]), pad)  # for COCO mAP rescaling
-
-            label = self.labels[index].copy()
-            if label.size:
-                label[:, 1:] = wh2xy(label[:, 1:], ratio[0] * w, ratio[1] * h, pad[0], pad[1])
-            if self.augment:
-                image, label = random_perspective(image, label, params)
-        nl = len(label)  # number of labels
-        if nl:
-            label[:, 1:5] = xy2wh(label[:, 1:5], image.shape[1], image.shape[0])
-
-        if self.augment:
-            # Albumentations
-            image, label = self.albumentations(image, label)
-            nl = len(label)  # update after albumentations
-            # HSV color-space
-            augment_hsv(image, params)
-            # Flip up-down
-            if random.random() < params['flip_ud']:
-                image = numpy.flipud(image)
-                if nl:
-                    label[:, 2] = 1 - label[:, 2]
-            # Flip left-right
-            if random.random() < params['flip_lr']:
-                image = numpy.fliplr(image)
-                if nl:
-                    label[:, 1] = 1 - label[:, 1]
-
+        nl = 0
         target = torch.zeros((nl, 6))
-        if nl:
-            target[:, 1:] = torch.from_numpy(label)
 
         # Convert HWC to CHW, BGR to RGB
         sample = image.transpose((2, 0, 1))[::-1]
@@ -92,91 +76,22 @@ class Dataset(data.Dataset):
         return torch.from_numpy(sample), target, shapes
 
     def __len__(self):
-        return len(self.filenames)
+        total_frames = 0
+        for _, v in self.video_frames.items():
+            total_frames += v
+        return total_frames
 
     def load_image(self, i):
-        image = cv2.imread(self.filenames[i])
+        ret, image = self.current_capture.read()
         h, w = image.shape[:2]
         r = self.input_size / max(h, w)
         if r != 1:
-            image = cv2.resize(image,
-                               dsize=(int(w * r), int(h * r)),
-                               interpolation=resample() if self.augment else cv2.INTER_LINEAR)
+            image = cv2.resize(
+                image,
+                dsize=(int(w * r), int(h * r)),
+                interpolation=cv2.INTER_LINEAR
+            )
         return image, (h, w)
-
-    def load_mosaic(self, index, params):
-        label4 = []
-        image4 = numpy.full((self.input_size * 2, self.input_size * 2, 3), 0, dtype=numpy.uint8)
-        y1a, y2a, x1a, x2a, y1b, y2b, x1b, x2b = (None, None, None, None, None, None, None, None)
-
-        border = [-self.input_size // 2, -self.input_size // 2]
-
-        xc = int(random.uniform(-border[0], 2 * self.input_size + border[1]))
-        yc = int(random.uniform(-border[0], 2 * self.input_size + border[1]))
-
-        indices = [index] + random.choices(self.indices, k=3)
-        random.shuffle(indices)
-
-        for i, index in enumerate(indices):
-            # Load image
-            image, _ = self.load_image(index)
-            shape = image.shape
-            if i == 0:  # top left
-                x1a = max(xc - shape[1], 0)
-                y1a = max(yc - shape[0], 0)
-                x2a = xc
-                y2a = yc
-                x1b = shape[1] - (x2a - x1a)
-                y1b = shape[0] - (y2a - y1a)
-                x2b = shape[1]
-                y2b = shape[0]
-            if i == 1:  # top right
-                x1a = xc
-                y1a = max(yc - shape[0], 0)
-                x2a = min(xc + shape[1], self.input_size * 2)
-                y2a = yc
-                x1b = 0
-                y1b = shape[0] - (y2a - y1a)
-                x2b = min(shape[1], x2a - x1a)
-                y2b = shape[0]
-            if i == 2:  # bottom left
-                x1a = max(xc - shape[1], 0)
-                y1a = yc
-                x2a = xc
-                y2a = min(self.input_size * 2, yc + shape[0])
-                x1b = shape[1] - (x2a - x1a)
-                y1b = 0
-                x2b = shape[1]
-                y2b = min(y2a - y1a, shape[0])
-            if i == 3:  # bottom right
-                x1a = xc
-                y1a = yc
-                x2a = min(xc + shape[1], self.input_size * 2)
-                y2a = min(self.input_size * 2, yc + shape[0])
-                x1b = 0
-                y1b = 0
-                x2b = min(shape[1], x2a - x1a)
-                y2b = min(y2a - y1a, shape[0])
-
-            image4[y1a:y2a, x1a:x2a] = image[y1b:y2b, x1b:x2b]
-            pad_w = x1a - x1b
-            pad_h = y1a - y1b
-
-            # Labels
-            label = self.labels[index].copy()
-            if len(label):
-                label[:, 1:] = wh2xy(label[:, 1:], shape[1], shape[0], pad_w, pad_h)
-            label4.append(label)
-
-        # Concat/clip labels
-        label4 = numpy.concatenate(label4, 0)
-        for x in label4[:, 1:]:
-            numpy.clip(x, 0, 2 * self.input_size, out=x)
-
-        # Augment
-        image4, label4 = random_perspective(image4, label4, params, border)
-
-        return image4, label4
 
     @staticmethod
     def collate_fn(batch):
@@ -296,9 +211,11 @@ def resize(image, input_size, augment):
     h = (input_size - pad[1]) / 2
 
     if shape[::-1] != pad:  # resize
-        image = cv2.resize(image,
-                           dsize=pad,
-                           interpolation=resample() if augment else cv2.INTER_LINEAR)
+        image = cv2.resize(
+            image,
+            dsize=pad,
+            interpolation=resample() if augment else cv2.INTER_LINEAR
+        )
     top, bottom = int(round(h - 0.1)), int(round(h + 0.1))
     left, right = int(round(w - 0.1)), int(round(w + 0.1))
     image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT)  # add border
