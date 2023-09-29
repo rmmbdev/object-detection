@@ -1,10 +1,12 @@
-# dockerfile v1
+# dockerfile v1.01
 import argparse
+import glob
 import os
 import subprocess
 import warnings
+from pathlib import Path
 
-import cv2
+import matplotlib.pyplot as plt
 import numpy
 import torch
 import yaml
@@ -19,12 +21,6 @@ from src.utils.util import (
     setup_multi_processes
 )
 
-import matplotlib
-
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-
 warnings.filterwarnings("ignore")
 ROOT = '/code/'
 WEIGHTS_PATH = os.path.join(ROOT, 'models')
@@ -38,11 +34,11 @@ def learning_rate(args, params):
 
 
 @torch.no_grad()
-def test(args, params, model=None):
+def test(args, params, total_frames_sample, clean, threshold, model=None):
     filenames = []
     filenames.append(os.path.join(ROOT, 'data', 'VIS_Onboard', 'VIS_Onboard', 'Videos', 'MVI_0790_VIS_OB.avi'))
     filenames.append(os.path.join(ROOT, 'data', 'VIS_Onboard', 'VIS_Onboard', 'Videos', 'MVI_0792_VIS_OB.avi'))
-    dataset = Dataset(filenames, args.input_size, params, )
+    dataset = Dataset(filenames, args.input_size, params, total_frames_sample)
     loader = data.DataLoader(
         dataset,
         batch_size=8,
@@ -58,8 +54,8 @@ def test(args, params, model=None):
     model.half()
     model.eval()
 
-    plots = []
     file_index = 0
+    sample_index = 0
     for samples, targets, shapes in loader:
         samples = samples.cuda()
         targets = targets.cuda()
@@ -89,79 +85,79 @@ def test(args, params, model=None):
                 conf = obj[4].numpy()
                 cls = obj[5].numpy()
 
-                if conf > 0.01:
+                if conf > threshold:
                     sample_with_boxes = draw_rectangle_with_text_wrt_points(
                         sample_with_boxes,
                         int(box[0]),
                         int(box[1]),
                         int(box[2]),
                         int(box[3]),
-                        str(cls),
+                        params['names'][int(cls)],
                     )
 
-            # fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-            # axs[0].imshow(sample)
-            # axs[0].set_title('Original')
-            #
-            # axs[1].imshow(sample_with_boxes)
-            # axs[1].set_title('Detected')
+            fig, axs = plt.subplots(1, 2)
+            axs[0].imshow(sample)
+            axs[0].set_title('Original')
 
-            plt.subplot(1, 2, 1)
-            plt.imshow(sample)
-            plt.title('Original')
+            axs[1].imshow(sample_with_boxes)
+            axs[1].set_title('Detected')
 
-            plt.subplot(1, 2, 2)
-            plt.imshow(sample_with_boxes)
-            plt.title('Detected')
-            #
-            # plots.append(fig)
-            plt.savefig(os.path.join(ROOT, "results", f"vid{file_index}-file{i}.png"))
-            plots.append(plt)
+            width_inches = 9.03  # Adjust as needed
+            height_inches = 6.01  # Adjust as needed
+            fig.set_size_inches(width_inches, height_inches)
 
-            if len(plots) >= loader.dataset.video_frames[filenames[file_index]]:
-                # save plots
-                result_root = os.path.join(ROOT, "results")
+            fig.savefig(
+                os.path.join(ROOT, "results", f"vid{file_index}-file{sample_index}.png"),
+                bbox_inches='tight',
+                dpi=300
+            )
+            plt.close(fig)
 
-                # subprocess.call([
-                #     'local/bin/ffmpeg',
-                #     '-framerate', '8',
-                #     '-i', 'file%02d.png',
-                #     '-r', '30',
-                #     '-pix_fmt', 'yuv420p',
-                #     os.path.join(result_root, 'video_name.mp4')
-                # ])
+            sample_index += 1
 
-                # def update(frame):
-                #     plt.clf()  # Clear the current plot
-                #     plt.imshow(plots[frame].canvas.buffer_rgba())
-                #     plt.axis('off')  # Turn off axis
-                #     plt.title(f'Frame {frame + 1}')
-                #
-                # fig = plt.figure()
-                #
-                # # Create an animation object
-                # animation = FuncAnimation(fig, update, frames=len(plots), repeat=False)
-                #
-                # # Save the animation as an mp4 video
-                # video_output_path = os.path.join(
-                #     ROOT, "results", f"{filenames[file_index]}".replace(".avi", "-output.mp4")
-                # )
-                # animation.save(video_output_path, writer='ffmpeg')
+            if sample_index >= loader.dataset.video_frames[filenames[file_index]]:
+                images_path = os.path.join(ROOT, "results")
+                images_pattern = f'{images_path}/vid{file_index}-file%d.png'
 
-                # video = cv2.VideoWriter('video.mp4', cv2.VideoWriter_fourcc('A', 'V', 'C', '1'), 1,
-                #                         (mat.shape[0], mat.shape[1]))
+                video_output_path = os.path.join(
+                    ROOT, "results", f"{Path(filenames[file_index]).name}".replace(".avi", "-output.mp4")
+                )
+
+                exit_code = subprocess.call([
+                    'ffmpeg',
+                    '-framerate', '8',
+                    '-i', images_pattern,
+                    '-r', '30',
+                    '-pix_fmt', 'yuv420p',
+                    video_output_path,
+                    '-y'
+                ])
+
+                print("Video saved as", video_output_path, "with exit code:", exit_code)
 
                 file_index += 1
-                plots = []
-            # plots.append(fig)
+                sample_index = 0
 
-    return plots
+    if clean:
+        # remove image files
+        images_path = os.path.join(ROOT, "results")
+        images_pattern = f'*.png'
+        matching_files = glob.glob(os.path.join(images_path, images_pattern))
+        print("Files:", matching_files)
+        for file_path in matching_files:
+            try:
+                os.remove(file_path)
+            except OSError as e:
+                print(f"Error: {file_path} - {e}")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-size', default=640, type=int)
     parser.add_argument('--batch-size', default=128, type=int)
+    parser.add_argument('--total-frames-sample', default=200, type=int)
+    parser.add_argument('--clean', default=True, type=bool)
+    parser.add_argument('--threshold', default=0.2, type=float)
 
     args = parser.parse_args()
 
@@ -171,7 +167,7 @@ def main():
     with open('4_args.yaml', errors='ignore') as f:
         params = yaml.safe_load(f)
 
-    plots = test(args, params)
+    test(args, params, args.total_frames_sample, args.clean, args.threshold)
 
     print("Done!")
 

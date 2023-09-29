@@ -14,7 +14,7 @@ RUN apt install build-essential libbz2-dev libdb-dev \
   libreadline-dev libffi-dev libgdbm-dev liblzma-dev \
   libncursesw5-dev libsqlite3-dev libssl-dev \
   zlib1g-dev uuid-dev tk-dev wget liblapack-dev \
-  graphviz fonts-humor-sans git  -y
+  graphviz fonts-humor-sans git ffmpeg -y
 
 # install python
 RUN VER=3.10.10 \
@@ -40,8 +40,6 @@ RUN pip install wilds
 RUN pip install transformers sentencepiece
 RUN pip install ultralytics
 RUN pip install ffmpeg-python
-
-RUN apt-get install -y ffmpeg
 
 RUN cat /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py | grep recompute_scale_factor
 COPY ./src/upsampling.py /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py

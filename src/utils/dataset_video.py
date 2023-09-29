@@ -4,6 +4,7 @@ import random
 
 import cv2
 import numpy
+import numpy as np
 import torch
 from PIL import Image
 from torch.utils import data
@@ -12,11 +13,16 @@ FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'
 
 
 class Dataset(data.Dataset):
-    def __init__(self, filenames, input_size, params):
+    def __init__(self, filenames, input_size, params, total_frames_sample):
         self.params = params
         self.input_size = input_size
         self.filenames = filenames
         self.video_frames = {}
+
+        if total_frames_sample > 0:
+            self.total_frames_sample = total_frames_sample
+        else:
+            self.total_frames_sample = np.Inf
 
         self.current_capture = None
         self.current_file_index = 0
@@ -35,7 +41,7 @@ class Dataset(data.Dataset):
                 ret, frame = video_capture.read()
 
                 # Check if the frame was read successfully
-                if (not ret) or (frame_count >= 5):
+                if (not ret) or (frame_count >= self.total_frames_sample):
                     break  # Break the loop when the video ends or an error occurs
 
                 # Increment the frame counter
@@ -45,6 +51,8 @@ class Dataset(data.Dataset):
             video_capture.release()
 
             self.video_frames[fn] = frame_count
+
+        print("Dataset Summary:", self.video_frames)
 
     def __getitem__(self, index):
         if self.current_capture is None:
@@ -57,6 +65,9 @@ class Dataset(data.Dataset):
             self.current_file_index += 1
             self.current_capture = cv2.VideoCapture(file_name)
             self.current_frame_index = 0
+
+        if index % 100 == 0:
+            print("File:", self.current_file_index, " Frame", index)
 
         image, shape = self.load_image(index)
         self.current_frame_index += 1

@@ -1,7 +1,7 @@
 version: '3.8'
 
 x-common: &common
-  image: obj-03:latest
+  image: obj-04:latest
   runtime: nvidia
   environment:
     - NVIDIA_VISIBLE_DEVICES=all
