@@ -27,3 +27,6 @@ services:
   00_shared:
     <<: *python
     command: python3 code/0_test.py
+  6_yolo8_video:
+    <<: *python
+    command: python3 code/6_yolo8_video.py
