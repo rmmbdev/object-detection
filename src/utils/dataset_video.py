@@ -31,7 +31,10 @@ class Dataset(data.Dataset):
         self.load_files()
 
     def load_files(self):
-        for fn in self.filenames:
+        print("Preloading dataset")
+        total = len(self.filenames)
+        for idx, fn in enumerate(self.filenames):
+            print(f"{idx + 1}/{total} Loading file: [{fn}]")
             video_capture = cv2.VideoCapture(fn)
             frame_count = 0
 
@@ -50,9 +53,10 @@ class Dataset(data.Dataset):
             # Release the video capture object
             video_capture.release()
 
-            self.video_frames[fn] = frame_count
+            self.video_frames[fn] = frame_count - 1
+            print(f"Frames: {self.video_frames[fn]}")
 
-        print("Dataset Summary:", self.video_frames)
+        print("Dataset total frames:", sum([v for k, v in self.video_frames.items()]))
 
     def __getitem__(self, index):
         if self.current_capture is None:
@@ -94,6 +98,8 @@ class Dataset(data.Dataset):
 
     def load_image(self, i):
         ret, image = self.current_capture.read()
+        if not ret:
+            return np.zeros((self.input_size, self.input_size, 3)), (self.input_size, self.input_size)
         h, w = image.shape[:2]
         r = self.input_size / max(h, w)
         if r != 1:
