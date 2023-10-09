@@ -7,6 +7,7 @@ x-common: &common
     - NVIDIA_VISIBLE_DEVICES=all
   env_file:
     - .env
+  shm_size: 4gb
 
 x-python: &python
   <<: *common
@@ -19,7 +20,6 @@ x-python: &python
     - ~/.models:/root/.keras/models
     - ~/.notebooks:/notebooks
 
-
 services:
   test-smi:
     <<: *common
@@ -29,4 +29,4 @@ services:
     command: python3 code/0_test.py
   6_yolo8_video:
     <<: *python
-    command: python3 code/6_yolo8_video.py
+    command: python3 code/7_yolo8_video_all.py
