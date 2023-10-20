@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils import data
+import moviepy.editor as mpy
 
 FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'
 
@@ -24,7 +25,7 @@ class Dataset(data.Dataset):
         else:
             self.total_frames_sample = np.Inf
 
-        self.current_capture = None
+        self.current_reader = None
         self.current_file_index = 0
         self.current_frame_index = 0
 
@@ -35,10 +36,8 @@ class Dataset(data.Dataset):
         total = len(self.filenames)
         for idx, fn in enumerate(self.filenames):
             print(f"{idx + 1}/{total} Loading file: [{fn}]")
-            video_capture = cv2.VideoCapture(fn)
-
-            frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            video_capture.release()
+            video_data = mpy.VideoFileClip(fn)
+            frame_count = int(video_data.fps * video_data.duration)
 
             self.video_frames[fn] = min(frame_count, self.total_frames_sample)
             print(f"Frames: {self.video_frames[fn]}")
@@ -46,16 +45,17 @@ class Dataset(data.Dataset):
         print("Dataset total frames:", sum([v for k, v in self.video_frames.items()]))
 
     def __getitem__(self, index):
-        if self.current_capture is None:
+        if self.current_reader is None:
             file_name = self.filenames[self.current_file_index]
-            self.current_capture = cv2.VideoCapture(file_name)
+            video = mpy.VideoFileClip(file_name)
+            self.current_reader = video.iter_frames()
             self.current_frame_index = 0
 
         if self.current_frame_index > self.video_frames[self.filenames[self.current_file_index]]:
-            self.current_capture.release()
             file_name = self.filenames[self.current_file_index]
             self.current_file_index += 1
-            self.current_capture = cv2.VideoCapture(file_name)
+            video = mpy.VideoFileClip(file_name)
+            self.current_reader = video.iter_frames()
             self.current_frame_index = 0
 
         if index % 100 == 0:
@@ -73,7 +73,7 @@ class Dataset(data.Dataset):
         target = torch.zeros((nl, 6))
 
         # Convert HWC to CHW, BGR to RGB
-        sample = image.transpose((2, 0, 1))[::-1]
+        sample = image.transpose((2, 0, 1))
         sample = numpy.ascontiguousarray(sample)
 
         return torch.from_numpy(sample), target, shapes
@@ -85,9 +85,7 @@ class Dataset(data.Dataset):
         return total_frames
 
     def load_image(self, i):
-        ret, image = self.current_capture.read()
-        if not ret:
-            return np.ones((self.input_size, self.input_size, 3)), (self.input_size, self.input_size)
+        image = next(self.current_reader)
         h, w = image.shape[:2]
         r = self.input_size / max(h, w)
         if r != 1:
