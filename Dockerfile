@@ -1,4 +1,4 @@
-# v1.01
+# v1.02
 FROM nvidia/cuda:12.0.1-cudnn8-runtime-ubuntu22.04
 
 ENV TZ=Asia/Dubai
@@ -40,6 +40,7 @@ RUN pip install wilds
 RUN pip install transformers sentencepiece
 RUN pip install ultralytics
 RUN pip install ffmpeg-python
+RUN pip install scikit-video
 
 RUN cat /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py | grep recompute_scale_factor
 COPY ./src/upsampling.py /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py
