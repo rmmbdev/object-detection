@@ -36,24 +36,11 @@ class Dataset(data.Dataset):
         for idx, fn in enumerate(self.filenames):
             print(f"{idx + 1}/{total} Loading file: [{fn}]")
             video_capture = cv2.VideoCapture(fn)
-            frame_count = 0
 
-            # Loop to read each frame from the video
-            while True:
-                # Read the next frame from the video
-                ret, frame = video_capture.read()
-
-                # Check if the frame was read successfully
-                if (not ret) or (frame_count >= self.total_frames_sample):
-                    break  # Break the loop when the video ends or an error occurs
-
-                # Increment the frame counter
-                frame_count += 1
-
-            # Release the video capture object
+            frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
             video_capture.release()
 
-            self.video_frames[fn] = frame_count - 1
+            self.video_frames[fn] = min(frame_count, self.total_frames_sample)
             print(f"Frames: {self.video_frames[fn]}")
 
         print("Dataset total frames:", sum([v for k, v in self.video_frames.items()]))
@@ -65,6 +52,7 @@ class Dataset(data.Dataset):
             self.current_frame_index = 0
 
         if self.current_frame_index > self.video_frames[self.filenames[self.current_file_index]]:
+            self.current_capture.release()
             file_name = self.filenames[self.current_file_index]
             self.current_file_index += 1
             self.current_capture = cv2.VideoCapture(file_name)
@@ -99,7 +87,7 @@ class Dataset(data.Dataset):
     def load_image(self, i):
         ret, image = self.current_capture.read()
         if not ret:
-            return np.zeros((self.input_size, self.input_size, 3)), (self.input_size, self.input_size)
+            return np.ones((self.input_size, self.input_size, 3)), (self.input_size, self.input_size)
         h, w = image.shape[:2]
         r = self.input_size / max(h, w)
         if r != 1:
