@@ -40,7 +40,7 @@ RUN pip install wilds
 RUN pip install transformers sentencepiece
 RUN pip install ultralytics
 RUN pip install ffmpeg-python
-RUN pip install scikit-video
+RUN pip install moviepy
 
 RUN cat /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py | grep recompute_scale_factor
 COPY ./src/upsampling.py /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py
