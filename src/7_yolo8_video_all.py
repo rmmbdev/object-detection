@@ -48,7 +48,7 @@ def test(args, params, total_frames_sample, clean, threshold, batch_size, model=
         os.path.join(ROOT, "data", 'VIS_Onshore', 'VIS_Onshore', 'Videos'),
     ]
     filenames = get_file_names(folders)
-    # filenames = filenames[15:30]
+    # filenames = filenames[2:30]
     dataset = Dataset(filenames, args.input_size, params, total_frames_sample)
     loader = data.DataLoader(
         dataset,
@@ -67,6 +67,7 @@ def test(args, params, total_frames_sample, clean, threshold, batch_size, model=
 
     file_index = 0
     sample_index = 0
+    # buffers = []
     for samples, targets, shapes in loader:
         samples = samples.cuda()
         targets = targets.cuda()
@@ -117,11 +118,24 @@ def test(args, params, total_frames_sample, clean, threshold, batch_size, model=
             height_inches = 6.01  # Adjust as needed
             fig.set_size_inches(width_inches, height_inches)
 
+            # buffer = BytesIO()
             fig.savefig(
                 os.path.join(ROOT, "results", f"vid{file_index}-file{sample_index}.png"),
                 bbox_inches='tight',
                 dpi=300
             )
+
+            # fig.savefig(
+            #     buffer,
+            #     bbox_inches='tight',
+            #     dpi=300,
+            #     format='png'
+            # )
+            # buffer.seek(0)
+            # img = PIL.Image.open(buffer)
+            # buffers.append(numpy.array(img))
+            #
+            # buffer.close()
             plt.close(fig)
 
             sample_index += 1
@@ -162,12 +176,21 @@ def test(args, params, total_frames_sample, clean, threshold, batch_size, model=
                             os.remove(file_path)
                         except OSError as e:
                             print(f"Error: {file_path} - {e}")
+                # Build video
+                # clip = moviepy.video.io.ImageSequenceClip.ImageSequenceClip(buffers, fps=10)
+                #
+                # video_output_path = os.path.join(
+                #     ROOT, "results", f"{Path(filenames[file_index]).name}".replace(".avi", "-output.mp4")
+                # )
+                # # Write video
+                # clip.write_videofile(video_output_path)
+                # buffers = []
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-size', default=640, type=int)
-    parser.add_argument('--batch-size', default=64, type=int)
+    parser.add_argument('--batch-size', default=16, type=int)
     parser.add_argument('--total-frames-sample', default=-1, type=int)
     parser.add_argument('--clean', default=True, type=bool)
     parser.add_argument('--threshold', default=0.2, type=float)

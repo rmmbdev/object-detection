@@ -1,14 +1,14 @@
-import math
 import os
 import random
 
 import cv2
+import math
+import moviepy.editor as mpy
 import numpy
 import numpy as np
 import torch
 from PIL import Image
 from torch.utils import data
-import moviepy.editor as mpy
 
 FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'
 
@@ -51,9 +51,9 @@ class Dataset(data.Dataset):
             self.current_reader = video.iter_frames()
             self.current_frame_index = 0
 
-        if self.current_frame_index > self.video_frames[self.filenames[self.current_file_index]]:
-            file_name = self.filenames[self.current_file_index]
+        if self.current_frame_index >= self.video_frames[self.filenames[self.current_file_index]]:
             self.current_file_index += 1
+            file_name = self.filenames[self.current_file_index]
             video = mpy.VideoFileClip(file_name)
             self.current_reader = video.iter_frames()
             self.current_frame_index = 0
