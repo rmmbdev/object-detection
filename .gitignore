@@ -261,3 +261,5 @@ playwright/.cache/
 # Visual Studio Code
 .vscode/
 .history
+
+*.pth
