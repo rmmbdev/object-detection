@@ -48,7 +48,7 @@ def test(args, params, total_frames_sample, clean, threshold, batch_size, model=
         os.path.join(ROOT, "data", 'VIS_Onshore', 'VIS_Onshore', 'Videos'),
     ]
     filenames = get_file_names(folders)
-    # filenames = filenames[2:30]
+    filenames = filenames[15:]
     dataset = Dataset(filenames, args.input_size, params, total_frames_sample)
     loader = data.DataLoader(
         dataset,
