@@ -46,3 +46,4 @@ RUN pip install deep_sort_realtime
 RUN cat /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py | grep recompute_scale_factor
 COPY ./src/upsampling.py /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py
 RUN cat /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py | grep recompute_scale_factor
+COPY ./src/weights/fasterrcnn_resnet50_fpn_v2_coco-dd69338a.pth /root/.cache/torch/hub/checkpoints/

@@ -263,3 +263,4 @@ playwright/.cache/
 .history
 
 *.pth
+*outputs/
