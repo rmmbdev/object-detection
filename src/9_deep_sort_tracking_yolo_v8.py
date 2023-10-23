@@ -6,9 +6,14 @@ import time
 import cv2
 import numpy as np
 import torch
-import torchvision
 from deep_sort_realtime.deepsort_tracker import DeepSort
+from torch import Tensor
 from torchvision.transforms import ToTensor
+
+from src.utils.util import (
+    non_max_suppression
+)
+from src.utils.dataset_video import resize
 
 COCO_91_CLASSES = [
     '__background__',
@@ -27,6 +32,7 @@ COCO_91_CLASSES = [
 ]
 
 ROOT = '/code/'
+WEIGHTS_PATH = os.path.join(ROOT, 'models')
 
 
 # Define a function to convert detections to SORT format.
@@ -99,7 +105,7 @@ def main():
     )
     parser.add_argument(
         '--imgsz',
-        default=None,
+        default=640,
         help='image resize, 640 will resize images to 640x640',
         type=int
     )
@@ -148,7 +154,7 @@ def main():
     parser.add_argument(
         '--cls',
         nargs='+',
-        default=[9,],
+        default=[9, ],
         help='which classes to track',
         type=int
     )
@@ -161,15 +167,21 @@ def main():
     print(f"Tracking: {[COCO_91_CLASSES[idx] for idx in args.cls]}")
     print(f"Detector: {args.model}")
     print(f"Re-ID embedder: {args.embedder}")
+
     # Load model.
-    model = getattr(torchvision.models.detection, args.model)(weights='DEFAULT')
+    # model = getattr(torchvision.models.detection, args.model)(weights='DEFAULT')
+    model = torch.load(os.path.join(WEIGHTS_PATH, "v8_x.pt"), map_location='cuda')['model'].float()
+    model.half()
+
     # Set model to evaluation mode.
     model.eval().to(device)
+
     # Initialize a SORT tracker object.
     tracker = DeepSort(max_age=30, embedder=args.embedder)
 
     # VIDEO_PATH = os.path.join(ROOT, "data", 'VIS_Onboard', 'VIS_Onboard', 'Videos', 'MVI_0788_VIS_OB.avi')
     VIDEO_PATH = os.path.join(ROOT, "data", 'VIS_Onshore', 'VIS_Onshore', 'Videos', 'MVI_1622_VIS.avi')
+    # VIDEO_PATH = os.path.join(ROOT, "data", 'VIS_Onshore', 'VIS_Onshore', 'Videos', 'MVI_1582_VIS.avi')
     # VIDEO_PATH = os.path.join(ROOT, "data", "input", 'mvmhat_1_1.mp4')
     # VIDEO_PATH = args.input
 
@@ -191,31 +203,63 @@ def main():
         # Read a frame
         ret, frame = cap.read()
         if ret:
-            if args.imgsz != None:
+            h, w = frame.shape[:2]
+            r = args.imgsz / max(h, w)
+            if r != 1:
                 resized_frame = cv2.resize(
-                    cv2.cvtColor(frame, cv2.COLOR_BGR2RGB),
-                    (args.imgsz, args.imgsz)
+                    frame,
+                    dsize=(int(w * r), int(h * r)),
+                    interpolation=cv2.INTER_LINEAR
                 )
-            else:
-                resized_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            shape = (h, w)
+
+            # Resize
+            resized_frame, ratio, pad = resize(resized_frame, args.imgsz, augment=False)
+            shapes = shape, ((h / shape[0], w / shape[1]), pad)  # for COCO mAP rescaling
+
+            # Convert HWC to CHW, BGR to RGB
+            resized_frame = resized_frame.transpose((2, 0, 1))
+            resized_frame = np.ascontiguousarray(resized_frame)
+
+            # if args.imgsz != None:
+            #     resized_frame = cv2.resize(
+            #         cv2.cvtColor(frame, cv2.COLOR_BGR2RGB),
+            #         (args.imgsz, args.imgsz)
+            #     )
+            # else:
+            #     resized_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # Convert frame to tensor and send it to device (cpu or cuda).
-            frame_tensor = ToTensor()(resized_frame).to(device)
+            frame_tensor = torch.from_numpy(resized_frame).to(device)
+            frame_tensor = frame_tensor.half()
+            frame_tensor = frame_tensor / 255
 
             start_time = time.time()
             # Feed frame to model and get detections.
             det_start_time = time.time()
             with torch.no_grad():
-                detections = model([frame_tensor])[0]
+                frame_tensor = torch.unsqueeze(frame_tensor, 0)
+                outputs: Tensor = model(frame_tensor)
+                detections = non_max_suppression(outputs, 0.001, 0.65)
             det_end_time = time.time()
 
             det_fps = 1 / (det_end_time - det_start_time)
 
             # Convert detections to Deep SORT format.
-            detections = convert_detections(detections, args.threshold, args.cls)
+            detections = detections[0]
+            detections_converted = []
+            for i in range(detections.shape[0]):
+                d = detections[i]
+                obj = d.cpu()
+                detections_converted.append(
+                    (obj[:4].numpy().tolist(), float(obj[4].numpy()), str(int(obj[5].numpy())))
+                )
+
+            # detections = convert_detections(detections, args.threshold, args.cls)
 
             # Update tracker with detections.
             track_start_time = time.time()
-            tracks = tracker.update_tracks(detections, frame=frame)
+            tracks = tracker.update_tracks(detections_converted, frame=frame)
             track_end_time = time.time()
             track_fps = 1 / (track_end_time - track_start_time)
 
