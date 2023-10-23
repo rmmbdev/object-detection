@@ -1,4 +1,4 @@
-# dockerfile v1.01
+# dockerfile v1.02
 import argparse
 import glob
 import os
