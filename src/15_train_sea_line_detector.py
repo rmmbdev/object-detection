@@ -4,6 +4,8 @@ import json
 import os
 import warnings
 from datetime import datetime
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -53,13 +55,7 @@ class Resnet18BasedModel(nn.Module):
         self.features = nn.Sequential(*list(resnet18.children())[:-2])  # Exclude the last two layers
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.classifier = nn.Sequential(
-            nn.Linear(512, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 1)  # Regression output, 1 output node
+            nn.Linear(512, 1)  # Regression output, 1 output node
         )
 
     def forward(self, x):
@@ -173,6 +169,7 @@ def train(
         file_index = 0
         sample_index = 0
         # buffers = []
+        losses = []
         for samples, targets, shapes in loader:
             samples = samples.cuda()
             targets = targets.cuda()
@@ -187,8 +184,10 @@ def train(
                 optimizer.step()
 
             # Print progress
-            print(f'Epoch:{epoch} -> loss:{loss.item()}')
+            losses.append(loss.item())
+            print("loss", loss.item())
 
+        print(f'*************** Epoch:{epoch} -> mean loss:{np.mean(losses)}')
         lr_scheduler.step()
         torch.save(model, os.path.join(ROOT, "models", f"model-{experiment_date_time}-{epoch}.pth"))
 
@@ -196,12 +195,12 @@ def train(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-size', default=640, type=int)
-    parser.add_argument('--batch-size', default=8, type=int)
+    parser.add_argument('--batch-size', default=5, type=int)
     parser.add_argument('--total-frames-sample', default=-1, type=int)
     parser.add_argument('--clean', default=True, type=bool)
     parser.add_argument('--threshold', default=0.2, type=float)
     parser.add_argument('--pos', default=2, type=int)
-    parser.add_argument('--epochs', default=30, type=int)
+    parser.add_argument('--epochs', default=5, type=int)
 
     args = parser.parse_args()
 
@@ -214,8 +213,8 @@ def main():
     # define model here
     model = Resnet18BasedModel().cuda()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.1)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
     criterion = nn.MSELoss()
 
     train(
