@@ -1,4 +1,4 @@
-# v1.03
+# v1.04
 FROM nvidia/cuda:12.0.1-cudnn8-runtime-ubuntu22.04
 
 ENV TZ=Asia/Dubai
@@ -47,3 +47,4 @@ RUN cat /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py |
 COPY ./src/upsampling.py /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py
 RUN cat /usr/local/lib/python3.10/site-packages/torch/nn/modules/upsampling.py | grep recompute_scale_factor
 COPY ./src/weights/fasterrcnn_resnet50_fpn_v2_coco-dd69338a.pth /root/.cache/torch/hub/checkpoints/
+COPY ./src/weights/deeplabv3_resnet101_coco-586e9e4e.pth /root/.cache/torch/hub/checkpoints/

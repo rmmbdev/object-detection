@@ -148,7 +148,7 @@ def main():
     parser.add_argument(
         '--cls',
         nargs='+',
-        default=[9,],
+        default=[9, ],
         help='which classes to track',
         type=int
     )
@@ -169,7 +169,8 @@ def main():
     tracker = DeepSort(max_age=30, embedder=args.embedder)
 
     # VIDEO_PATH = os.path.join(ROOT, "data", 'VIS_Onboard', 'VIS_Onboard', 'Videos', 'MVI_0788_VIS_OB.avi')
-    VIDEO_PATH = os.path.join(ROOT, "data", 'VIS_Onshore', 'VIS_Onshore', 'Videos', 'MVI_1622_VIS.avi')
+    # VIDEO_PATH = os.path.join(ROOT, "data", 'VIS_Onshore', 'VIS_Onshore', 'Videos', 'MVI_1622_VIS.avi')
+    VIDEO_PATH = os.path.join(ROOT, "data", 'lab', 'processed', 'vid-1-1.mp4')
     # VIDEO_PATH = os.path.join(ROOT, "data", "input", 'mvmhat_1_1.mp4')
     # VIDEO_PATH = args.input
 

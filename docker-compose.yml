@@ -18,6 +18,7 @@ x-python: &python
     - /mnt/data/other/smd/results:/code/results
     - /mnt/data/other/smd/models:/code/models
     - ~/.models:/root/.keras/models
+    - ~/.cache/torch:/root/.cache/torch
     - ~/.notebooks:/notebooks
 
 services:

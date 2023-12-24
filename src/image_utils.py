@@ -1,5 +1,10 @@
+import os
+
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
+
+ROOT = '/code/'
 
 
 def draw_rectangle_with_text_wrt_hw(image, x, y, w, h, text):
@@ -31,3 +36,31 @@ def draw_rectangle_with_text_wrt_points(image, x1, y1, x2, y2, text):
     image = cv2.putText(image, text, (text_x, text_y), font, font_scale, font_color, font_thickness)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     return image
+
+
+def draw_point(image, x, y):
+    point_coordinates = (x, y)
+    color = (0, 0, 255)  # BGR color, so (0, 0, 255) is red
+    thickness = -1  # Thickness -1 fills the circle
+    radius = 5  # Radius of the circle
+
+    cv2.circle(image, point_coordinates, radius, color, thickness)
+
+    return image
+
+
+def save_image(image):
+    fig, axs = plt.subplots(1, 1)
+    axs.imshow(image)
+    axs.set_title('Original')
+    width_inches = 9.03  # Adjust as needed
+    height_inches = 6.01  # Adjust as needed
+    fig.set_size_inches(width_inches, height_inches)
+
+    # buffer = BytesIO()
+    fig.savefig(
+        os.path.join(ROOT, "results", f"tmp.png"),
+        bbox_inches='tight',
+        dpi=300
+    )
+    plt.close(fig)
