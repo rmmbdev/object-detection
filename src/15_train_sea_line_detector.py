@@ -136,14 +136,7 @@ def train(
 
     filenames_filtered = []
     labels = {}
-    old_pos = pos
     for idx, lbl_dict in enumerate(labels_raw):
-        pos = old_pos
-        if (idx == 0) and (pos == 1):
-            pos = 2
-        elif (idx == 0) and (pos == 2):
-            pos = 1
-
         file_name = "-".join(lbl_dict['file_upload'].split('-')[1:])
         for fn in filenames:
             if file_name in fn:
@@ -165,11 +158,14 @@ def train(
     )
 
     model.train()
+
     for epoch in range(epochs):
         file_index = 0
         sample_index = 0
         # buffers = []
         losses = []
+        predicts = []
+        labels = []
         for samples, targets, shapes in loader:
             samples = samples.cuda()
             targets = targets.cuda()
@@ -187,19 +183,29 @@ def train(
             losses.append(loss.item())
             print("loss", loss.item())
 
+            targets = targets.cpu()
+            labels.extend(targets)
+
+            outputs = outputs.cpu()
+            predicts.extend(outputs)
+
         print(f'*************** Epoch:{epoch} -> mean loss:{np.mean(losses)}')
         lr_scheduler.step()
         torch.save(model, os.path.join(ROOT, "models", f"model-{experiment_date_time}-{epoch}.pth"))
+        print("Write labels and predicts")
+        with open(os.path.join(ROOT, f"diff-{epoch}.txt"), mode='w') as f:
+            for lbl, pred in zip(labels, predicts):
+                f.write(f"{lbl}-{pred}")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-size', default=640, type=int)
-    parser.add_argument('--batch-size', default=5, type=int)
+    parser.add_argument('--batch-size', default=16, type=int)
     parser.add_argument('--total-frames-sample', default=-1, type=int)
     parser.add_argument('--clean', default=True, type=bool)
     parser.add_argument('--threshold', default=0.2, type=float)
-    parser.add_argument('--pos', default=2, type=int)
+    parser.add_argument('--pos', default=0, type=int)
     parser.add_argument('--epochs', default=5, type=int)
 
     args = parser.parse_args()
@@ -215,7 +221,7 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
-    criterion = nn.MSELoss()
+    criterion = nn.HuberLoss()
 
     train(
         args=args,

@@ -129,6 +129,7 @@ def evaluate(
 ):
     filenames = [
         os.path.join(ROOT, "data", 'lab', 'processed', "vid-1-1.mp4"),
+        os.path.join(ROOT, "data", 'lab', 'processed', "vid-1-8.mp4"),
         os.path.join(ROOT, "data", 'lab', 'processed', "vid-2-25.mp4"),
     ]
 
@@ -246,7 +247,7 @@ def main():
     parser.add_argument('--total-frames-sample', default=-1, type=int)
     parser.add_argument('--clean', default=True, type=bool)
     parser.add_argument('--threshold', default=0.2, type=float)
-    parser.add_argument('--pos', default=0, type=int)
+    parser.add_argument('--pos', default=2, type=int)
     parser.add_argument('--epochs', default=10, type=int)
 
     args = parser.parse_args()
@@ -257,7 +258,7 @@ def main():
     with open('15_args.yaml', errors='ignore') as f:
         params = yaml.safe_load(f)
 
-    model = torch.load(os.path.join(ROOT, "models", f"model-20231223033734-9.pth"))
+    model = torch.load(os.path.join(ROOT, "models", f"model-20231224214634-4.pth"))
 
     evaluate(
         args=args,

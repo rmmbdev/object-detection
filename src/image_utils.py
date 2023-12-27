@@ -49,7 +49,7 @@ def draw_point(image, x, y):
     return image
 
 
-def save_image(image):
+def save_image(image, path=None):
     fig, axs = plt.subplots(1, 1)
     axs.imshow(image)
     axs.set_title('Original')
@@ -57,9 +57,11 @@ def save_image(image):
     height_inches = 6.01  # Adjust as needed
     fig.set_size_inches(width_inches, height_inches)
 
-    # buffer = BytesIO()
+    if path is None:
+        path = os.path.join(ROOT, "results", f"tmp.png")
+
     fig.savefig(
-        os.path.join(ROOT, "results", f"tmp.png"),
+        path,
         bbox_inches='tight',
         dpi=300
     )
