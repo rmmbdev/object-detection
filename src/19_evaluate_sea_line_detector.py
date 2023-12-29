@@ -28,6 +28,40 @@ ROOT = '/code/'
 WEIGHTS_PATH = os.path.join(ROOT, 'models')
 
 
+class ResNet50Model(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        # ResNet50 backbone
+        resnet50 = models.resnet50(pretrained=True)
+        self.features = nn.Sequential(*list(resnet50.children())[:-2])
+        for param in self.features.parameters():
+            param.requires_grad = False
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+        # Classifier
+        self.classifier = nn.Sequential(
+            nn.Linear(2048, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, 1)
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x
+
+    def make_features_trainable(self, tail_layers_count=1):
+        for params in self.features[-tail_layers_count:].parameters():
+            params.requires_grad = True
+
+
 class Resnet18BasedModel(nn.Module):
     def __init__(self):
         super(Resnet18BasedModel, self).__init__()
@@ -133,7 +167,7 @@ def main():
         params = yaml.safe_load(f)
 
     # define model here
-    model = torch.load(os.path.join(ROOT, "models", f"model-20231228003156-0.pth"))
+    model = torch.load(os.path.join(ROOT, "models", f"model-20231229015834-16.pth"))
 
     predict(
         args=args,

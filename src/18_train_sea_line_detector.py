@@ -86,9 +86,11 @@ class ResNet50Model(nn.Module):
         super().__init__()
 
         # ResNet50 backbone
-        self.features = models.resnet50(pretrained=True)
+        resnet50 = models.resnet50(pretrained=True)
+        self.features = nn.Sequential(*list(resnet50.children())[:-2])
         for param in self.features.parameters():
             param.requires_grad = False
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         # Classifier
         self.classifier = nn.Sequential(
@@ -102,8 +104,9 @@ class ResNet50Model(nn.Module):
         )
 
     def forward(self, x):
-        x = self.backbone(x)
-        x = x.squeeze(-1).squeeze(-1)
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
         x = self.classifier(x)
         return x
 
@@ -236,8 +239,9 @@ def train(
     )
 
     model.train()
+    epoch_number = 0
 
-    print("########################################################## Only FC")
+    print("####################### Only FC ###########################")
     for epoch in range(3):
         losses, predicts, labels, model, loader, criterion, optimizer, lr_scheduler = train_epoch(
             model,
@@ -247,68 +251,39 @@ def train(
             lr_scheduler
         )
         print(f'*************** Epoch:{epoch} -> mean loss:{np.mean(losses)}')
-        torch.save(model, os.path.join(ROOT, "models", f"model-{experiment_date_time}-{epoch}.pth"))
+        torch.save(model, os.path.join(ROOT, "models", f"model-{experiment_date_time}-{epoch_number}.pth"))
         print("Write labels and predicts")
-        with open(os.path.join(ROOT, "results", f"diff-{epoch}.txt"), mode='w') as f:
+        with open(os.path.join(ROOT, "results", f"diff-{epoch_number}.txt"), mode='w') as f:
             for lbl, pred in zip(labels, predicts):
                 f.write(f"{lbl.item()}-{pred.item()}\n")
+        epoch_number += 1
 
-    print("########################################################## With Features")
-    model.make_features_trainable(tail_layers_count=1)
-    for epoch in range(2):
-        losses, predicts, labels, model, loader, criterion, optimizer, lr_scheduler = train_epoch(
-            model,
-            loader,
-            criterion,
-            optimizer,
-            lr_scheduler
-        )
-        print(f'*************** Epoch:{epoch} -> mean loss:{np.mean(losses)}')
-        torch.save(model, os.path.join(ROOT, "models", f"model-{experiment_date_time}-{epoch}.pth"))
-        print("Write labels and predicts")
-        with open(os.path.join(ROOT, "results", f"diff-{epoch}.txt"), mode='w') as f:
-            for lbl, pred in zip(labels, predicts):
-                f.write(f"{lbl.item()}-{pred.item()}\n")
-
-    print("########################################################## With Features")
-    model.make_features_trainable(tail_layers_count=2)
-    for epoch in range(1):
-        losses, predicts, labels, model, loader, criterion, optimizer, lr_scheduler = train_epoch(
-            model,
-            loader,
-            criterion,
-            optimizer,
-            lr_scheduler
-        )
-        print(f'*************** Epoch:{epoch} -> mean loss:{np.mean(losses)}')
-        torch.save(model, os.path.join(ROOT, "models", f"model-{experiment_date_time}-{epoch}.pth"))
-        print("Write labels and predicts")
-        with open(os.path.join(ROOT, "results", f"diff-{epoch}.txt"), mode='w') as f:
-            for lbl, pred in zip(labels, predicts):
-                f.write(f"{lbl.item()}-{pred.item()}\n")
-
-    print("########################################################## With Features")
-    model.make_features_trainable(tail_layers_count=3)
-    for epoch in range(1):
-        losses, predicts, labels, model, loader, criterion, optimizer, lr_scheduler = train_epoch(
-            model,
-            loader,
-            criterion,
-            optimizer,
-            lr_scheduler
-        )
-        print(f'*************** Epoch:{epoch} -> mean loss:{np.mean(losses)}')
-        torch.save(model, os.path.join(ROOT, "models", f"model-{experiment_date_time}-{epoch}.pth"))
-        print("Write labels and predicts")
-        with open(os.path.join(ROOT, "results", f"diff-{epoch}.txt"), mode='w') as f:
-            for lbl, pred in zip(labels, predicts):
-                f.write(f"{lbl.item()}-{pred.item()}\n")
+    print("####################### With FEATURES ###########################")
+    tails = 15
+    for t in range(1, tails):
+        print(f"*********************** With FEATURES {t} ***********************")
+        model.make_features_trainable(tail_layers_count=t)
+        for epoch in range(1):
+            losses, predicts, labels, model, loader, criterion, optimizer, lr_scheduler = train_epoch(
+                model,
+                loader,
+                criterion,
+                optimizer,
+                lr_scheduler
+            )
+            print(f'*************** Epoch:{epoch} -> mean loss:{np.mean(losses)}')
+            torch.save(model, os.path.join(ROOT, "models", f"model-{experiment_date_time}-{epoch_number}.pth"))
+            print("Write labels and predicts")
+            with open(os.path.join(ROOT, "results", f"diff-{epoch_number}.txt"), mode='w') as f:
+                for lbl, pred in zip(labels, predicts):
+                    f.write(f"{lbl.item()}-{pred.item()}\n")
+            epoch_number += 1
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-size', default=640, type=int)
-    parser.add_argument('--batch-size', default=64, type=int)
+    parser.add_argument('--batch-size', default=6, type=int)
     parser.add_argument('--total-frames-sample', default=-1, type=int)
     parser.add_argument('--clean', default=True, type=bool)
     parser.add_argument('--threshold', default=0.2, type=float)
@@ -324,7 +299,7 @@ def main():
         params = yaml.safe_load(f)
 
     # define model here
-    model = Resnet18BasedModel().cuda()
+    model = ResNet50Model().cuda()
     print(model)
 
     optimizer = optim.Adam(model.parameters(), lr=0.01)
