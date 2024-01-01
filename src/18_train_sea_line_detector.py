@@ -259,11 +259,11 @@ def train(
         epoch_number += 1
 
     print("####################### With FEATURES ###########################")
-    tails = 15
+    tails = 20
     for t in range(1, tails):
         print(f"*********************** With FEATURES {t} ***********************")
-        model.make_features_trainable(tail_layers_count=t)
-        for epoch in range(1):
+        model.make_features_trainable(tail_layers_count=t * 2)
+        for epoch in range(3):
             losses, predicts, labels, model, loader, criterion, optimizer, lr_scheduler = train_epoch(
                 model,
                 loader,
@@ -282,8 +282,8 @@ def train(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input-size', default=640, type=int)
-    parser.add_argument('--batch-size', default=6, type=int)
+    parser.add_argument('--input-size', default=256, type=int)
+    parser.add_argument('--batch-size', default=16, type=int)
     parser.add_argument('--total-frames-sample', default=-1, type=int)
     parser.add_argument('--clean', default=True, type=bool)
     parser.add_argument('--threshold', default=0.2, type=float)
@@ -299,7 +299,7 @@ def main():
         params = yaml.safe_load(f)
 
     # define model here
-    model = ResNet50Model().cuda()
+    model = Resnet18BasedModel().cuda()
     print(model)
 
     optimizer = optim.Adam(model.parameters(), lr=0.01)
