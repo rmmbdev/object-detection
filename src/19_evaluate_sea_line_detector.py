@@ -167,7 +167,7 @@ def main():
         params = yaml.safe_load(f)
 
     # define model here
-    model = torch.load(os.path.join(ROOT, "models", f"model-20231229015834-16.pth"))
+    model = torch.load(os.path.join(ROOT, "models", f"model-20240103175733-59.pth"))
 
     predict(
         args=args,

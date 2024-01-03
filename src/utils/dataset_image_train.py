@@ -12,7 +12,7 @@ FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'
 
 
 class Dataset(data.Dataset):
-    def __init__(self, filenames, input_size, params, pos=0, labels=None):
+    def __init__(self, filenames, input_size, params, pos=0, labels=None, labels_full_path_index=False):
         self.params = params
         self.input_size = input_size
         self.filenames = filenames
@@ -22,6 +22,7 @@ class Dataset(data.Dataset):
             self.labels: pd.DataFrame = labels.copy()
             self.labels = self.labels.set_index("file")
         self.pos_label = ["left", "center", "right"][pos]
+        self.labels_full_path_index = labels_full_path_index
 
     def __getitem__(self, index):
         image, shape = self.load_image(index)
@@ -36,8 +37,14 @@ class Dataset(data.Dataset):
 
         target_value = 0
         if self.labels is not None:
-            file_name = self.filenames[index].split('/')[-1]
+            if not self.labels_full_path_index:
+                file_name = self.filenames[index].split('/')[-1]
+            else:
+                file_name = self.filenames[index]
+
             target_value = self.labels.loc[file_name][self.pos_label]
+            target_value = (target_value / h) * self.input_size
+
         target = torch.from_numpy(np.array([target_value]))
         target = target.to(torch.float32)
 
